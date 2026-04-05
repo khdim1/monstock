@@ -5126,112 +5126,89 @@ function showLowStockProducts() {
                 loader.style.display = 'none';
             }
             
-            // Charger les factures
-            function loadInvoices() {
-                const loader = document.getElementById('invoices-loader');
-                loader.style.display = 'block';
-                
-                const sales = getData(STORAGE_KEYS.SALES);
-                const clients = getData(STORAGE_KEYS.CLIENTS);
-                const invoiceSettings = getData(STORAGE_KEYS.INVOICE_SETTINGS);
-                const prefix = invoiceSettings.prefixe;
-                
-                const tbody = document.getElementById('invoices-body');
-                tbody.innerHTML = '';
-                
-                const searchTerm = document.getElementById('invoices-search').value.toLowerCase();
-                let filteredSales = sales;
-                
-                if (searchTerm) {
-                    filteredSales = sales.filter(sale => 
-                        sale.id.toString().includes(searchTerm) ||
-                        (sale.client_id && clients.find(c => c.id === sale.client_id)?.nom?.toLowerCase().includes(searchTerm)) ||
-                        sale.montant.toString().includes(searchTerm)
-                    );
-                }
-                
-                if (filteredSales.length === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="7" class="empty-state">
-                                <i class="fas fa-file-invoice"></i>
-                                <p>Aucune facture trouvée</p>
-                            </td>
-                        </tr>
-                    `;
-                } else {
-                    filteredSales.forEach(sale => {
-                        const client = clients.find(c => c.id === sale.client_id);
-                        const dueDate = new Date(sale.date);
-                        dueDate.setDate(dueDate.getDate() + invoiceSettings.paymentTerm);
-                        const today = new Date();
-                        const isOverdue = !sale.paye && dueDate < today;
-                        
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td>${prefix}${sale.id}</td>
-                            <td>${new Date(sale.date).toLocaleDateString('fr-FR')}</td>
-                            <td>${client ? client.nom : 'Client inconnu'}</td>
-                            <td>${formatPrice(sale.montant)}</td>
-                            <td class="${isOverdue ? 'overdue' : ''}">${dueDate.toLocaleDateString('fr-FR')}</td>
-                            <td>
-                                ${sale.paye ? 
-                                    '<span class="paid-status">Payée</span>' : 
-                                    isOverdue ? 
-                                    '<span class="overdue-status">En retard</span>' : 
-                                    '<span class="pending-status">En attente</span>'}
-                            </td>
-                            <td class="payment-actions">
-                                <button class="btn btn-sm btn-primary view-invoice-btn" data-invoice-id="${sale.id}" title="Voir">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                ${!sale.paye ? 
-                                    `<button class="btn btn-sm btn-success record-payment-btn" data-invoice-id="${sale.id}" data-amount="${sale.montant}" title="Paiement">
-                                        <i class="fas fa-money-bill"></i>
-                                    </button>` : 
-                                    ''}
-                            </td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
-                }
-                
-                // Événements pour les boutons
-                document.querySelectorAll('.view-invoice-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const invoiceId = parseInt(this.getAttribute('data-invoice-id'));
-                        const sales = getData(STORAGE_KEYS.SALES);
-                        const invoice = sales.find(s => s.id === invoiceId);
-                        if (invoice) {
-                            generateInvoice(invoice);
-                            openModal('invoiceModal');
-                        }
-                    });
-                });
-                
-                document.querySelectorAll('.record-payment-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const invoiceId = parseInt(this.getAttribute('data-invoice-id'));
-                        const amount = parseFloat(this.getAttribute('data-amount'));
-                        currentPaymentInvoiceId = invoiceId;
-                        
-                        const sales = getData(STORAGE_KEYS.SALES);
-                        const sale = sales.find(s => s.id === invoiceId);
-                        const clients = getData(STORAGE_KEYS.CLIENTS);
-                        const client = sale ? clients.find(c => c.id === sale.client_id) : null;
-                        const invoiceSettings = getData(STORAGE_KEYS.INVOICE_SETTINGS);
-                        
-                        document.getElementById('payment-invoice-number').value = `${invoiceSettings.prefixe}${invoiceId}`;
-                        document.getElementById('payment-client-name').value = client ? client.nom : 'Client inconnu';
-                        document.getElementById('payment-due-amount').value = formatPrice(amount);
-                        document.getElementById('payment-amount').value = amount;
-                        
-                        openModal('paymentModal');
-                    });
-                });
-                
-                loader.style.display = 'none';
-            }
+           function loadInvoices() {
+    const loader = document.getElementById('invoices-loader');
+    if (loader) loader.style.display = 'block';
+    
+    const sales = getData(STORAGE_KEYS.SALES);
+    const clients = getData(STORAGE_KEYS.CLIENTS);
+    const invoiceSettings = getData(STORAGE_KEYS.INVOICE_SETTINGS);
+    const prefix = invoiceSettings.prefixe;
+    const tbody = document.getElementById('invoices-body');
+    tbody.innerHTML = '';
+    
+    const searchTerm = document.getElementById('invoices-search').value.toLowerCase();
+    let filteredSales = sales;
+    
+    if (searchTerm) {
+        filteredSales = sales.filter(sale => {
+            const client = sale.client_id ? clients.find(c => c.id === sale.client_id) : null;
+            // Utiliser le nom du client (soit de la table clients, soit du champ client_name)
+            const clientName = client ? client.nom : (sale.client_name || '');
+            return sale.id.toString().includes(searchTerm) ||
+                   clientName.toLowerCase().includes(searchTerm) ||
+                   sale.montant.toString().includes(searchTerm);
+        });
+    }
+    
+    if (filteredSales.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-file-invoice"></i><p>Aucune facture trouvée</p></td></tr>';
+    } else {
+        filteredSales.forEach(sale => {
+            const client = sale.client_id ? clients.find(c => c.id === sale.client_id) : null;
+            // Afficher le nom du client (soit de la table clients, soit le champ client_name)
+            const clientName = client ? client.nom : (sale.client_name || 'Client inconnu');
+            const dueDate = new Date(sale.date);
+            dueDate.setDate(dueDate.getDate() + invoiceSettings.paymentTerm);
+            const today = new Date();
+            const isOverdue = !sale.paye && dueDate < today;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${prefix}${sale.id}</td>
+                <td>${new Date(sale.date).toLocaleDateString('fr-FR')}</td>
+                <td>${clientName}</td>
+                <td>${formatPrice(sale.montant)}</td>
+                <td class="${isOverdue ? 'overdue' : ''}">${dueDate.toLocaleDateString('fr-FR')}</td>
+                <td>${sale.paye ? '<span class="paid-status">Payée</span>' : (isOverdue ? '<span class="overdue-status">En retard</span>' : '<span class="pending-status">En attente</span>')}</td>
+                <td class="payment-actions">
+                    <button class="btn btn-sm btn-primary view-invoice-btn" data-invoice-id="${sale.id}" title="Voir"><i class="fas fa-eye"></i></button>
+                    ${!sale.paye ? `<button class="btn btn-sm btn-success record-payment-btn" data-invoice-id="${sale.id}" data-amount="${sale.montant - (sale.amount_paid || 0)}" title="Paiement"><i class="fas fa-money-bill"></i></button>` : ''}
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    // Événements pour les boutons (inchangés)
+    document.querySelectorAll('.view-invoice-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const invoiceId = parseInt(this.getAttribute('data-invoice-id'));
+            const sale = getData(STORAGE_KEYS.SALES).find(s => s.id === invoiceId);
+            if (sale) { generateInvoice(sale); openModal('invoiceModal'); }
+        });
+    });
+    
+    document.querySelectorAll('.record-payment-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentPaymentInvoiceId = parseInt(this.getAttribute('data-invoice-id'));
+            const amountDue = parseFloat(this.getAttribute('data-amount'));
+            const sales = getData(STORAGE_KEYS.SALES);
+            const sale = sales.find(s => s.id === currentPaymentInvoiceId);
+            const clients = getData(STORAGE_KEYS.CLIENTS);
+            const client = sale.client_id ? clients.find(c => c.id === sale.client_id) : null;
+            const invoiceSettings = getData(STORAGE_KEYS.INVOICE_SETTINGS);
+            
+            document.getElementById('payment-invoice-number').value = `${invoiceSettings.prefixe}${currentPaymentInvoiceId}`;
+            document.getElementById('payment-client-name').value = client ? client.nom : (sale.client_name || 'Client inconnu');
+            document.getElementById('payment-due-amount').value = formatPrice(amountDue);
+            document.getElementById('payment-amount').value = amountDue;
+            openModal('paymentModal');
+        });
+    });
+    
+    if (loader) loader.style.display = 'none';
+}
             
             // Charger les données de caisse
             function loadCashierData() {
