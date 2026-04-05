@@ -1155,16 +1155,18 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        // Configuration
-        const API_BASE = '/api';
+        // ========== CONFIGURATION ==========
         let token = localStorage.getItem('token');
-        let currentUser = null;
+        let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
         let currentPage = 'dashboard';
         let charts = {};
+        let cart = [];
+        let currentDiscount = 0;
 
-        // Fonctions utilitaires
+        // ========== FONCTIONS UTILITAIRES ==========
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
+            if (!toast) return;
             toast.textContent = message;
             toast.className = `toast ${type} show`;
             setTimeout(() => {
@@ -1181,7 +1183,7 @@
                 }
             };
             if (body) options.body = JSON.stringify(body);
-            const response = await fetch(`${API_BASE}${endpoint}`, options);
+            const response = await fetch(`/api${endpoint}`, options);
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.error || 'Erreur serveur');
@@ -1201,24 +1203,22 @@
             return num.toLocaleString('fr-FR');
         }
 
-        // Gestion des modales
+        // Gestion des modales (conservez vos fonctions openModal/closeModal)
         function openModal(modalId) {
             const modal = document.getElementById(modalId);
             if (modal) modal.style.display = 'flex';
         }
-
         function closeModal(modalId) {
             const modal = document.getElementById(modalId);
             if (modal) modal.style.display = 'none';
         }
 
-        // Navigation
+        // ========== CHARGEMENT DES PAGES ==========
         async function showPage(page) {
             currentPage = page;
             document.getElementById('page-title').innerHTML = getPageTitle(page);
             const contentDiv = document.getElementById('page-content');
             contentDiv.innerHTML = '<div class="loader" style="display:block"></div>';
-            
             try {
                 if (page === 'dashboard') await loadDashboard(contentDiv);
                 else if (page === 'products') await loadProducts(contentDiv);
@@ -1252,7 +1252,7 @@
             return titles[page] || page;
         }
 
-        // Dashboard
+        // ========== DASHBOARD ==========
         async function loadDashboard(container) {
             const [products, clients, ventes] = await Promise.all([
                 apiCall('/produits'),
@@ -1265,7 +1265,6 @@
             const lowStock = products.filter(p => p.quantite < (p.minStock||10) && p.quantite>0).length;
             const totalPurchase = products.reduce((s,p)=>s + (p.prixAchat||0)*p.quantite,0);
             const totalSaleValue = products.reduce((s,p)=>s + p.prixVente*p.quantite,0);
-            
             let cashBalance = 0;
             try {
                 const caisseOps = await apiCall('/caisse');
@@ -1275,7 +1274,6 @@
                     return s;
                 }, 0);
             } catch(e) {}
-
             const html = `
                 <div class="stats-container">
                     <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-content"><div class="stat-title">Produits Total</div><div class="stat-value">${products.length}</div></div></div>
@@ -1299,7 +1297,6 @@
                 </div>
             `;
             container.innerHTML = html;
-            
             // Graphiques
             const last7Days = [];
             for (let i = 6; i >= 0; i--) {
@@ -1319,7 +1316,7 @@
             new Chart(ctx2, { type: 'doughnut', data: { labels: topProducts.map(p=>p.nom), datasets: [{ data: topProducts.map(p=>p.quantite), backgroundColor: ['#3498db','#2ecc71','#9b59b6','#f1c40f','#e74c3c'] }] } });
         }
 
-        // Produits
+        // ========== PRODUITS ==========
         async function loadProducts(container) {
             const products = await apiCall('/produits');
             const html = `
@@ -1338,7 +1335,6 @@
                 </div>
             `;
             container.innerHTML = html;
-            
             window.showProductModal = () => openProductModal();
             window.editProduct = (id) => openProductModal(id);
             window.deleteProduct = async (id) => {
@@ -1398,7 +1394,7 @@
             await loadProducts(document.getElementById('page-content'));
         };
 
-        // Clients
+        // ========== CLIENTS ==========
         async function loadClients(container) {
             const clients = await apiCall('/clients');
             const html = `
@@ -1467,7 +1463,7 @@
             await loadClients(document.getElementById('page-content'));
         };
 
-        // Ventes
+        // ========== VENTES ==========
         async function loadSales(container) {
             const ventes = await apiCall('/ventes');
             const html = `
@@ -1497,9 +1493,8 @@
 
         async function showSaleSystem(container) {
             const products = await apiCall('/produits');
-            let cart = [];
-            let currentDiscount = 0;
-            
+            cart = [];
+            currentDiscount = 0;
             const render = () => {
                 let subtotal = cart.reduce((s,item)=>s + item.price*item.quantity,0);
                 let total = subtotal - currentDiscount;
@@ -1571,7 +1566,7 @@
             render();
         }
 
-        // Factures
+        // ========== FACTURES ==========
         async function loadInvoices(container) {
             const factures = await apiCall('/factures');
             const html = `
@@ -1657,7 +1652,7 @@
             await loadInvoices(document.getElementById('page-content'));
         };
 
-        // Caisse
+        // ========== CAISSE ==========
         async function loadCashier(container) {
             const ops = await apiCall('/caisse');
             const html = `
@@ -1677,7 +1672,7 @@
             };
         }
 
-        // Inventaire
+        // ========== INVENTAIRE ==========
         async function loadInventory(container) {
             const inventaires = await apiCall('/inventaires');
             const html = `
@@ -1702,7 +1697,6 @@
                 document.body.insertAdjacentHTML('beforeend', htmlInv);
             };
             window.saveInventory = async (items) => {
-                const products = await apiCall('/produits');
                 let theoreticalTotal=0, actualTotal=0;
                 for(let item of items) {
                     const counted = parseInt(document.getElementById(`count_${item.productId}`).value) || 0;
@@ -1718,7 +1712,7 @@
             };
         }
 
-        // Rapports
+        // ========== RAPPORTS ==========
         async function loadReports(container) {
             const ventes = await apiCall('/ventes');
             const monthly = Array(12).fill(0);
@@ -1736,7 +1730,7 @@
             new Chart(document.getElementById('monthlyChart'), { type: 'bar', data: { labels: ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'], datasets: [{ label: 'Ventes mensuelles', data: monthly, backgroundColor: '#3498db' }] } });
         }
 
-        // Utilisateurs (admin only)
+        // ========== UTILISATEURS ==========
         async function loadUsers(container) {
             if(currentUser.role !== 'admin') {
                 container.innerHTML = '<div class="empty-state"><i class="fas fa-ban"></i><p>Accès réservé aux administrateurs</p></div>';
@@ -1792,7 +1786,7 @@
             await loadUsers(document.getElementById('page-content'));
         };
 
-        // Paramètres
+        // ========== PARAMÈTRES ==========
         async function loadSettings(container) {
             const settings = await apiCall('/settings/store');
             const html = `
@@ -1823,7 +1817,7 @@
             };
         }
 
-        // Initialisation de l'application
+        // ========== INITIALISATION ==========
         async function init() {
             const storedToken = localStorage.getItem('token');
             const storedUser = localStorage.getItem('user');
@@ -1885,7 +1879,6 @@
             });
         });
 
-        // Menu hamburger
         document.getElementById('menuToggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('show');
         });
@@ -1893,4 +1886,4 @@
         init();
     </script>
 </body>
-</html>
+</html> 
